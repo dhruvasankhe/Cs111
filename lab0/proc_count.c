@@ -8,12 +8,14 @@
 static struct proc_dir_entry* my_new_entry;
 
 static int seq_show(struct seq_file *s, void *v) {
-	int processCount = 0;
+	int procCount = 0;
 	struct task_struct* t;
+
 	for_each_process(t) {
-		processCount++;
+		procCount++;
 	}
-	seq_printf(s, "%d\n", processCount);
+
+	seq_printf(s, "%d\n", procCount);
 	return 0;
 }
 
@@ -33,6 +35,6 @@ static void __exit proc_count_exit(void)
 module_init(proc_count_init);
 module_exit(proc_count_exit);
 
-MODULE_AUTHOR("Your name");
-MODULE_DESCRIPTION("One sentence description");
+MODULE_AUTHOR("Dhruva Sankhe");
+MODULE_DESCRIPTION("A kernel module that provides the current number of running processes on the system through /proc/count");
 MODULE_LICENSE("GPL");
