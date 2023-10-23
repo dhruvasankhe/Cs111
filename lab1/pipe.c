@@ -6,77 +6,49 @@
 
 int main(int argc, char *argv[])
 {
-	// Checking Arguments
-    if (argc < 2) {
+	if (argc < 2) {
         errno = EINVAL;
-        perror("Usage: command1, command2");
-        exit(EXIT_FAILURE);
+        perror("Error");
+        exit(errno);
     }
 
-    // Creating Pipes
-    int pipes[argc - 1][2]; // Adjust the size of the pipes array
+    int fd[2];
+    pid_t pid;
+    int in_fd = STDIN_FILENO;  // Starts with standard input
 
-    // Create pipes
-    for (int i = 0; i < argc - 2; i++) { // You still create argc-2 pipes
-        if (pipe(pipes[i]) == -1) {
-            perror("pipe");
-            exit(EXIT_FAILURE);
-        }
-    }
-
-    for (int i = 0; i < argc - 1; i++) { // Adjust your loop to also fork for the last command
-        pid_t p = fork();
-
-        // Forking Failure Check
-        if (p == -1) {
-            perror("fork");
-            exit(EXIT_FAILURE);
+    for (int i = 1; i < argc; i++) {
+        if (i != argc - 1 && pipe(fd) < 0) {
+            perror("Pipe creation error");
+            exit(errno);
         }
 
-        // Child Process
-        if (p == 0) {
-            // If it's not the first command, redirect standard input from the previous pipe's read end
-            if (i != 0) {
-                dup2(pipes[i - 1][0], STDIN_FILENO);
-                close(pipes[i - 1][1]);
+        if ((pid = fork()) < 0) {
+            perror("Fork error");
+            exit(errno);
+        }
+
+        if (pid == 0) { // child
+            if (i != 1) {
+                dup2(in_fd, STDIN_FILENO);  // If not the first command, read from previous pipe
             }
-
-            // If it's not the last command, redirect standard output to the next pipe's write end
-            if (i < argc - 2) {
-                dup2(pipes[i][1], STDOUT_FILENO);
+            if (i != argc - 1) {
+                dup2(fd[1], STDOUT_FILENO);  // If not the last command, write to next pipe
+                close(fd[0]);  // Close read side as it's not used
             }
-
-            // Close all pipes in the child, we've already duplicated the ones we needed
-            for (int j = 0; j < argc - 2; j++) {
-                close(pipes[j][0]);
-                close(pipes[j][1]);
+            close(in_fd);  // Close this as we've duplicated the descriptor we needed
+            execlp(argv[i], argv[i], (char *)NULL);
+            perror("Exec error");
+            exit(errno);
+        } else {
+            close(fd[1]);  // Close write side
+            if (i != 1) {
+                close(in_fd);  // Close the previous read descriptor
             }
-
-            // Execute the command
-            execlp(argv[i + 1], argv[i + 1], (char *)NULL);
-            // If execlp returns, it's an error
-            perror("execlp");
-            exit(EXIT_FAILURE);
+            in_fd = fd[0];  // Update in_fd to current read end for next iteration
         }
     }
 
-    // In the parent: close all pipes, they're not needed anymore
-    for (int i = 0; i < argc - 2; i++) {
-        close(pipes[i][0]);
-        close(pipes[i][1]);
-    }
-
-    // Wait for all child processes to finish
-    for (int i = 0; i < argc - 1; i++) {
-        int status;
-        if (wait(&status) == -1) {
-            perror("wait");
-            exit(EXIT_FAILURE);
-        }
-        if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-            fprintf(stderr, "Error: Child process %d exited with error code %d.\n", i, WEXITSTATUS(status));
-            exit(EXIT_FAILURE);
-        }
-    }
+    // Wait for all children to finish
+    while (wait(NULL) > 0);
 	return 0;
 }
