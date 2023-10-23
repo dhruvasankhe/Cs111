@@ -48,8 +48,11 @@ int main(int argc, char *argv[])
             in_fd = fd[0];  // Update in_fd to current read end for next iteration
         }
     }
-
-    // Wait for all children to finish
-    while (wait(NULL) > 0);
-	return 0;
+    int status; // to get the status of child process
+        while ((pid = wait(&status)) > 0) {
+            if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
+                exit(WEXITSTATUS(status));
+            }
+        }
+    return 0;
 }
