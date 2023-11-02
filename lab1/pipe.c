@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <errno.h>
 
 int main(int argc, char *argv[])
 {
@@ -14,8 +15,8 @@ int main(int argc, char *argv[])
 
     int fd[2];
     pid_t pid;
+    int in_fd = STDIN_FILENO;  // Starts with standard input
 
-    // Iterate through the arguments (processes to run)
     for (int i = 1; i < argc; i++) {
         if (i != argc - 1 && pipe(fd) < 0) {
             perror("Pipe creation error");
@@ -28,27 +29,30 @@ int main(int argc, char *argv[])
         }
 
         if (pid == 0) { // child
-            if (i != argc - 1) {
-                dup2(fd[1], STDOUT_FILENO);  // Redirect stdout to pipe's write
-                close(fd[0]);
-                close(fd[1]);
+            if (i != 1) {
+                dup2(in_fd, STDIN_FILENO);  // If not the first command, read from previous pipe
             }
+            if (i != argc - 1) {
+                dup2(fd[1], STDOUT_FILENO);  // If not the last command, write to next pipe
+                close(fd[0]);  // Close read side as it's not used
+            }
+            close(in_fd);  // Close this as we've duplicated the descriptor we needed
             execlp(argv[i], argv[i], (char *)NULL);
             perror("Exec error");
             exit(errno);
-        } else { // parent
-            if (i != argc - 1) {
-                dup2(fd[0], STDIN_FILENO);   // Redirect stdin to pipe's read
-                close(fd[0]);
-                close(fd[1]);
+        } else {
+            close(fd[1]);  // Close write side
+            if (i != 1) {
+                close(in_fd);  // Close the previous read descriptor
             }
+            in_fd = fd[0];  // Update in_fd to current read end for next iteration
         }
     }
-
-    // parent waits for all children to finish
-    for (int i = 1; i < argc; i++) {
-        wait(NULL);
-    }
-	
-	return 0;
+    int status; // to get the status of child process
+        while ((pid = wait(&status)) > 0) {
+            if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
+                exit(WEXITSTATUS(status));
+            }
+        }
+    return 0;
 }
