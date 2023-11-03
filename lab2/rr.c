@@ -190,59 +190,55 @@ void sort_process_set(struct process_set ps) {
 }
 
 
-// Compute the median of all cpu times in a queue of processes, rounding to even
+// Here, we compute the median of all the cpu times in oricess queue, rounding to even
 long compute_median_runtime(struct process_list *pl) {
-  double median = 0.0;
-  if (!TAILQ_EMPTY(pl)) {
-    struct process *current;
-
-    // 1. get number of procs in queue
-    long nprocs = 0;
-    TAILQ_FOREACH(current, pl, pointers) {
-      nprocs++;
+    if (TAILQ_EMPTY(pl)) {
+        return 1; // If the list is empty, return the median as 1!
     }
-
-    // 2. collect all cpu times into an array
+    long nprocs = 0;
+    struct process *current;
+    // Count the number of processes
+    TAILQ_FOREACH(current, pl, pointers) {
+        nprocs++;
+    }
     long* cpu_times = malloc(sizeof(long) * nprocs);
+    if (cpu_times == NULL) {
+        // Handle malloc failure; depending on the system specifics,
+        // you may want to return an error code or exit.
+        return -1; // or handle memory allocation error appropriately
+    }
+    // Collect CPU times
     int i = 0;
     TAILQ_FOREACH(current, pl, pointers) {
-      cpu_times[i] = current->cpu_time;
-      i++;
+        cpu_times[i++] = current->cpu_time;
     }
-
-    // 3. sort the array
-    for (int i = 0; i < (nprocs-1); i++) {
-      for (int j = 0; j < (nprocs-i-1); j++) {
-        if (cpu_times[j] > cpu_times[j+1]) {
-          long temp = cpu_times[j];
-          cpu_times[j] = cpu_times[j+1];
-          cpu_times[j+1] = temp;
+    // Bubble sort CPU times
+    for (int i = 0; i < nprocs - 1; i++) {
+        for (int j = 0; j < nprocs - i - 1; j++) {
+            if (cpu_times[j] > cpu_times[j + 1]) {
+                long temp = cpu_times[j];
+                cpu_times[j] = cpu_times[j + 1];
+                cpu_times[j + 1] = temp;
+            }
         }
-      }
     }
-
-    // 4. compute them median
+    double median = 0.0;
+    // Compute the median
     if (nprocs % 2 != 0) {
-      median = cpu_times[nprocs/2];
+        median = cpu_times[nprocs / 2];
+    } else {
+        // For an even number of elements, take the average of the two middle elements
+        median = (cpu_times[(nprocs / 2) - 1] + cpu_times[nprocs / 2]) / 2.0;
+        
+        // If the median is not an integer, round it to the nearest even number
+        if (median != (long)median) {
+            median = ((long)(median + 0.5)) & ~1;
+        }
     }
-    else {
-      median = (cpu_times[(nprocs/2)-1] + cpu_times[nprocs/2]) / 2;
-      // round to even if non-whole number
-      int median_int = (int)median;
-      if (median - median_int != 0) {
-        median = (median_int % 2 == 0) ? (double)median_int : (double)(median_int + 1);
-      }
-    }
-
     free(cpu_times);
-  }
-
-  // clamp median to 1
-  if (median == 0)
-    median = 1;
-
-  return (long)median;
+    return (long)median;
 }
+
 
 int
 main (int argc, char *argv[])
