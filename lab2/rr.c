@@ -19,20 +19,15 @@ struct process
   TAILQ_ENTRY (process) pointers;
 
   /* Additional fields here */
-  long start_time;  // the time at which the process first runs
-  long end_time;         // the time at which the process finishes
-  long cpu_time;     // amount of time that process has consumed the cpu
   long response_time;    // amount of time between arrival and first run
-  long wait_time;        // amount of time that process was just waiting in queue
+  long start_exec_time;  // set when process runs for first time
+  long end_exec_time;         // the time at which the process finishes
+  long cpu_time;     // cpu time consumed by process
+  long wait_time;        // queue wait time of process
   /* End of "Additional fields here" */
 };
 
 TAILQ_HEAD (process_list, process);
-
-/* Skip past initial nondigits in *DATA, then scan an unsigned decimal
-   integer and return its value.  Do not scan past DATA_END.  Return
-   the integer’s value.  Report an error and exit if no integer is
-   found, or if the integer overflows.  */
 static long
 next_int (char const **data, char const *data_end)
 {
@@ -266,84 +261,75 @@ main (int argc, char *argv[])
 
   /* Your code here */
 
-  // Sort processes by arrival time
-  sort_process_set(ps);
+ // Sort processes by arrival time
+sort_process_set(ps);
 
-  // Initialize start and cpu times for each process
-  for (int i = 0; i < ps.nprocesses; i++) {
-    ps.process[i].start_time = -1;  // -1 denotes that the process has not started yet
-    ps.process[i].cpu_time = 0;     // Initialize with 0 CPU time as none has been used yet
+// Initialize start and cpu times for each process
+for (int i = 0; i < ps.nprocesses; i++) {
+  ps.process[i].start_exec_time = -1;  // -1 denotes that the process has not started yet
+  ps.process[i].cpu_time = 0;     // Initialize with 0 CPU time as none has been used yet
+}
+long qt = quantum_length;        // Time slice of each process
+long next = 0;                   // Index of process that is arriving next
+long time = 0;                   // Time counter
+struct process *previous = NULL; // Previously executed process
+struct process *current = NULL;  // Currently executing process
+
+// Main round-robin scheduling loop
+while (true) {
+  // Add processes that have arrived before or at the current time
+  while (next < ps.nprocesses && time >= ps.process[next].arrival_time) {
+    TAILQ_INSERT_TAIL(&list, &ps.process[next], pointers);
+    next++;
   }
-
-  struct process *prev_process = NULL;  // Previously executed process
-  struct process *curr_process = NULL;  // Currently executing process
-  long quantum = quantum_length;        // Time slice given to each process
-  long next_arrival = 0;                // Index of the next arriving process
-  long time = 0;                        // Elapsed time counter
-
-  // Main round-robin scheduling loop
-  while (true) {
-    // Add processes that have arrived before or at the current time
-    while (next_arrival < ps.nprocesses && time >= ps.process[next_arrival].arrival_time) {
-      TAILQ_INSERT_TAIL(&list, &ps.process[next_arrival], pointers);
-      next_arrival++;
-    }
-
   // Process switching logic
-  if (prev_process) {
-    TAILQ_REMOVE(&list, prev_process, pointers); // Remove the previous process from the queue
-    if (prev_process->burst_time == prev_process->cpu_time) {
+  if (previous) {
+    TAILQ_REMOVE(&list, previous, pointers); // Remove the previous process from the queue
+    if (previous->burst_time == previous->cpu_time) {
       // If the process has finished execution
-      prev_process->end_time = time;
-      prev_process->wait_time = prev_process->end_time - prev_process->arrival_time - prev_process->burst_time;
-      total_wait_time += prev_process->wait_time;
+      previous->end_exec_time = time;
+      previous->wait_time = previous->end_exec_time - previous->arrival_time - previous->burst_time;
+      total_wait_time += previous->wait_time;
     } else {
       // If the process has not finished, re-queue it
-      TAILQ_INSERT_TAIL(&list, prev_process, pointers);
+      TAILQ_INSERT_TAIL(&list, previous, pointers);
     }
   }
-
-  curr_process = TAILQ_FIRST(&list); // Fetch the process at the front of the queue
-
+  current = TAILQ_FIRST(&list); // Fetch the process at the front of the queue
   // If no processes are in the queue, jump forward in time to the next process arrival
-  if (!curr_process) {
-    if (next_arrival < ps.nprocesses) {
-      time = ps.process[next_arrival].arrival_time;
+  if (!current) {
+    if (next < ps.nprocesses) {
+      time = ps.process[next].arrival_time;
     } else {
       // If there are no more processes to arrive, break out of the loop
       break;
     }
   } else {
     // Context switch overhead if we're switching processes
-    if (prev_process && curr_process != prev_process) {
+    if (previous && current != previous) {
       time++; // Increment time to account for context switch
     }
-
     // If the process is running for the first time, set its start time
-    if (curr_process->start_time == -1) {
-      curr_process->start_time = time;
-      curr_process->response_time = time - curr_process->arrival_time;
-      total_response_time += curr_process->response_time;
+    if (current->start_exec_time == -1) {
+      current->start_exec_time = time;
+      current->response_time = time - current->arrival_time;
+      total_response_time += current->response_time;
     }
-
     // Compute new quantum using median runtime if quantum_length is set to -1
     if (quantum_length == -1) {
-      quantum = compute_median_runtime(&list);
+      qt = compute_median_runtime(&list);
     }
-
     // Determine run time for the current process
-    long remaining_time = curr_process->burst_time - curr_process->cpu_time;
-    long run_time = (quantum < remaining_time) ? quantum : remaining_time;
-    curr_process->cpu_time += run_time; // Update process' CPU time
+    long remaining_time = current->burst_time - current->cpu_time;
+    long run_time = (qt < remaining_time) ? qt : remaining_time;
+    current->cpu_time += run_time; // Update process' CPU time
     time += run_time; // Move forward in time by the run time
   }
-
   // Set the previous process to the current one for the next iteration
-  prev_process = curr_process;
+  previous = current;
 }
 
 // After the loop, scheduling is complete and all processes have been handled.
-
   /* End of "Your code here" */
 
   printf ("Average wait time: %.2f\n",
