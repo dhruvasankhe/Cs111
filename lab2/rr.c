@@ -159,18 +159,36 @@ init_processes (char const *filename)
   return (struct process_set) {nprocesses, process};
 }
 
-// Use bubble sort to sort a process set by arrival time
-void sort_process_set (struct process_set ps) {
-  for (long i = 0; i < (ps.nprocesses-1); i++) {
-    for (long j = 0; j < (ps.nprocesses - i - 1); j++) {
-      if (ps.process[j].arrival_time > ps.process[j+1].arrival_time) {
+// Sorting the process set by the arrival time
+void sort_process_set(struct process_set ps) {
+  // Flag to check if swapping has occurred, to potentially reduce the number of passes
+  int swapped;
+  
+  for (long i = 0; i < ps.nprocesses - 1; i++) {
+    // Initialize swapped to zero (false) at the beginning of each pass
+    swapped = 0;
+    
+    // Perform a pass of bubble sort
+    for (long j = 0; j < ps.nprocesses - i - 1; j++) {
+      // Compare adjacent processes by their arrival time
+      if (ps.process[j].arrival_time > ps.process[j + 1].arrival_time) {
+        // Swap the processes if they are out of order
         struct process temp = ps.process[j];
-        ps.process[j] = ps.process[j+1];
-        ps.process[j+1] = temp;
+        ps.process[j] = ps.process[j + 1];
+        ps.process[j + 1] = temp;
+
+        // Set swapped to one (true) to indicate that a swap occurred
+        swapped = 1;
       }
+    }
+
+    // If no two elements were swapped by inner loop, then the array is sorted
+    if (swapped == 0) {
+      break;
     }
   }
 }
+
 
 // Compute the median of all cpu times in a queue of processes, rounding to even
 long compute_median_runtime(struct process_list *pl) {
