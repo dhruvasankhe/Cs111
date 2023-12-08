@@ -19,11 +19,9 @@ typedef int32_t i32;
 #define BLOCK_OFFSET(i) (i * BLOCK_SIZE)
 #define NUM_BLOCKS 1024
 #define NUM_INODES 128
-
-// My personal macros
-#define NUM_BLOCKS_PER_GROUP 8192
-#define NUM_FRAGS_PER_GROUP  8192
-#define NUM_INODES_PER_GROUP 128
+#define BLOCKS_EACH_GROUP 8192
+#define FRAGS_EACH_GROUP  8192
+#define INODES_EACH_GROUP 128
 
 #define LOST_AND_FOUND_INO 11
 #define HELLO_WORLD_INO    12
@@ -208,9 +206,9 @@ void write_superblock(int fd) {
     superblock.s_first_data_block = SUPERBLOCK_BLOCKNO; /* First Data Block */
     superblock.s_log_block_size = 0;                    /* 1024 */
     superblock.s_log_frag_size = 0;                     /* 1024 */
-    superblock.s_blocks_per_group = NUM_BLOCKS_PER_GROUP;
-    superblock.s_frags_per_group = NUM_FRAGS_PER_GROUP;
-    superblock.s_inodes_per_group = NUM_INODES_PER_GROUP;
+    superblock.s_blocks_per_group = BLOCKS_EACH_GROUP;
+    superblock.s_frags_per_group = FRAGS_EACH_GROUP;
+    superblock.s_inodes_per_group = INODES_EACH_GROUP;
     superblock.s_mtime = 0;                             /* Mount time */
     superblock.s_wtime = current_time;                  /* Write time */
     superblock.s_mnt_count = 0;                         /* Number of times mounted so far */
@@ -315,7 +313,7 @@ void write_inode_bitmap(int fd) {
         errno_exit("lseek");
     }
 
-    u8 map_value[BLOCK_SIZE] = {0}; // Initialize all bits to 0
+    u8 map_value[BLOCK_SIZE] = {0};
 
     for (int i = 0; i < BLOCK_SIZE; ++i) {
         int cur_start = i * 8;
@@ -372,7 +370,7 @@ void write_inode_table(int fd) {
 	lost_and_found_inode.i_dtime = 0;
 	lost_and_found_inode.i_gid = 0;
 	lost_and_found_inode.i_links_count = 2;
-	lost_and_found_inode.i_blocks = 2; /* These are oddly 512 blocks */
+	lost_and_found_inode.i_blocks = 2;
 	lost_and_found_inode.i_block[0] = LOST_AND_FOUND_DIR_BLOCKNO;
 	write_inode(fd, LOST_AND_FOUND_INO, &lost_and_found_inode);
 
@@ -395,11 +393,9 @@ void write_inode_table(int fd) {
 	root_inode.i_dtime = 0;
 	root_inode.i_gid = 0;
 	root_inode.i_links_count = 3;
-	root_inode.i_blocks = 2; /* These are oddly 512 blocks */
+	root_inode.i_blocks = 2;
 	root_inode.i_block[0] = ROOT_DIR_BLOCKNO;
 	write_inode(fd, EXT2_ROOT_INO, &root_inode);
-	
-	// inode for hello-world file
 	struct ext2_inode hello_world_inode = {0};
 	hello_world_inode.i_mode = EXT2_S_IFREG
 	                              | EXT2_S_IRUSR
@@ -414,11 +410,10 @@ void write_inode_table(int fd) {
 	hello_world_inode.i_dtime = 0;
 	hello_world_inode.i_gid = 1000;
 	hello_world_inode.i_links_count = 1;
-	hello_world_inode.i_blocks = 2; /* These are oddly 512 blocks */
+	hello_world_inode.i_blocks = 2;
 	hello_world_inode.i_block[0] = HELLO_WORLD_FILE_BLOCKNO;
 	write_inode(fd, HELLO_WORLD_INO, &hello_world_inode);
 
-	// inode for hello symbolic link
 	struct ext2_inode hello_sym_link_inode = {0};
 	hello_sym_link_inode.i_mode = EXT2_S_IFLNK
 	                              | EXT2_S_IRUSR
@@ -433,19 +428,17 @@ void write_inode_table(int fd) {
 	hello_sym_link_inode.i_dtime = 0;
 	hello_sym_link_inode.i_gid = 1000;
 	hello_sym_link_inode.i_links_count = 1;
-	hello_sym_link_inode.i_blocks = 0; /* These are oddly 512 blocks */
-
-	//char directory[] = "hello-world";
+	hello_sym_link_inode.i_blocks = 0;
 	memcpy(hello_sym_link_inode.i_block, "hello-world", 11);
 	write_inode(fd, HELLO_INO, &hello_sym_link_inode);
 }
 
 void write_root_dir_block(int fd)
 {
-	//TODO
-	off_t off = BLOCK_OFFSET(ROOT_DIR_BLOCKNO);
-	off = lseek(fd, off, SEEK_SET);
-	if (off == -1) {
+	//TODO it's all yours
+	off_t offset = BLOCK_OFFSET(ROOT_DIR_BLOCKNO);
+	offset = lseek(fd, offset, SEEK_SET);
+	if (offset == -1) {
 		errno_exit("lseek");
 	}
 	ssize_t bytes_remaining = BLOCK_SIZE;
@@ -513,9 +506,11 @@ void write_lost_and_found_dir_block(int fd) {
 
 void write_hello_world_file_block(int fd)
 {
-	off_t off = BLOCK_OFFSET(HELLO_WORLD_FILE_BLOCKNO);
-	off = lseek(fd, off, SEEK_SET);
-	if (off == -1) {
+	off_t offset = BLOCK_OFFSET(HELLO_WORLD_FILE_BLOCKNO);
+	
+	offset = lseek(fd, offset, SEEK_SET);
+	if (offset == -1) 
+	{
 		errno_exit("lseek");
 	}
 
@@ -524,8 +519,8 @@ void write_hello_world_file_block(int fd)
 	strcpy(block_data, "Hello world\n");
 
 	ssize_t written_bytes = write(fd, block_data, BLOCK_SIZE);
-    // Writing to the file descriptor
-    if (written_bytes == -1) {
+    if (written_bytes == -1) 
+	{
 		errno_exit("write");
 	}
 }
